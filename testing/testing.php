@@ -92,8 +92,8 @@ function read_key() {
   return $key_event->wVirtualKeyCode;
 }
 
-// $key = read_key();
-// echo "$key \n";
+$key = read_key();
+echo "$key \n";
 
 
 
