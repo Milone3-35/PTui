@@ -8,6 +8,28 @@ $ffi = FFI::cdef("
   bool ReadConsoleInputA(void* hConsoleInput, void* lpBuffer, unsigned int nLength, unsigned int* lpNumberOfEventsRead);
   bool FlushConsoleInputBuffer(void* hConsoleInput);
 
+  typedef struct {
+    short X;
+    short Y;
+  } COORD;
+
+  typedef struct {
+    short Left;
+    short Top;
+    short Right;
+    short Bottom;
+  } SMALL_RECT;
+
+  typedef struct {
+    COORD dwSize;
+    COORD dwCursorPosition;
+    unsigned short wAttributes;
+    SMALL_RECT srWindow;
+    COORD dwMaximumWindowSize;
+  } CONSOLE_SCREEN_BUFFER_INFO;
+
+  bool GetConsoleScreenBufferInfo(void* hConsoleOutput, CONSOLE_SCREEN_BUFFER_INFO* lpConsoleScreenBufferInfo);
+
   struct KEY_EVENT_RECORD {
     int bKeyDown;
     unsigned short wRepeatCount;
@@ -36,8 +58,7 @@ class Editor {
   //RGB
   private array $rgb;
   //Size
-  private int $rows;
-  private int $columns;
+  private array $highest_points;
 
   function __construct()
   { 
@@ -53,8 +74,7 @@ class Editor {
     $ffi->SetConsoleMode($stdout, $mode->cdata);
 
     $this->is_running = true;
-
-
+    $this->highest_points = [0,0,0,0];    //N|E|S|W
     $this->rgb = $this->set_rgb();
   }
 
@@ -107,125 +127,71 @@ class Editor {
     return $key_event->wVirtualKeyCode;
   }
 
-  public function set_rgb() {
+  private function set_rgb() {
   $rgb = [];
+
+  /* We do a range of 1-256 even tho rgb is from 0-255, 
+  but intval returns 0 if $value is a string and we need 0, so we 
+  just substract 1 at the end
+  */
+
   //RED
-    $this->move_curosor(2,1);
-    echo "r:";
+  while (true) {
+    $this->move_curosor(4, 1);
+    echo "\033[2K";
 
-    $this->move_curosor(2, 3);
-    $red = readline();
-    while (true) {
-      if (intval($red) === 0) {
-        echo "\x1b[2K";
-        $this->move_curosor(2,1);
+    $red = readline("r:");
+    if (!is_numeric($red)) { continue; };
 
-        echo "r:";
-        $this->move_curosor(2, 3);
+    $red = intval($red);
+    if ($red < 0 || $red > 255) { continue; };
+    break;    
+  }
 
-        $red = readline();
-        echo "\x1b[2K"; 
-        continue;
+  //GREEN
+  while (true) {
+    $this->move_curosor(5, 1);
+    echo "\033[2K";
 
-      } else {
-        $red = intval($red);
-        if ($red > 255 || $red < 0) {
-          echo "\x1b[2K";
-          $this->move_curosor(2,1);
+    $green = readline("g:");
+    if (!is_numeric($green)) { continue; };
 
-          echo "r:";
-          $this->move_curosor(2, 3);
+    $green = intval($green);
+    if ($green < 0 || $green > 255) { continue; };
+    break;
+  }
 
-          $red = readline();
-          echo "\x1b[2K"; 
-          continue;
-        }
-        break;
-      }
-    }
-    
-    //GREEN
-    $this->move_curosor(3,1);
-    echo "g:";
+  //BLUE
+  while (true) {
+    $this->move_curosor(6, 1);
+    echo "\033[2K";
 
-    $this->move_curosor(3, 3);
-    $green = readline();
-    while (true) {
-      if (intval($green) === 0) {
-        echo "\x1b[2K";
-        $this->move_curosor(3,1);
+    $blue = readline("b:");
+    if (!is_numeric($blue)) { continue; };
 
-        echo "g:";
-        $this->move_curosor(3, 3);
-
-        $red = readline();
-        echo "\x1b[2K"; 
-        continue;
-
-      } else {
-        $green = intval($green);
-        if ($green > 255 || $green < 0) {
-          echo "\x1b[2K";
-          $this->move_curosor(3,1);
-
-          echo "g:";
-          $this->move_curosor(3, 3);
-
-          $green = readline();
-          echo "\x1b[2K"; 
-          continue;
-        }
-        break;
-      }
+    $blue = intval($blue);
+    if ($blue < 0 || $blue > 255) { continue; };
+    break;
     }
 
-    //BLUE
-    $this->move_curosor(4,1);
-    echo "b:";
-
-    $this->move_curosor(4, 3);
-    $blue = readline();
-    while (true) {
-      if (intval($blue) === 0) {
-        echo "\x1b[2K";
-        $this->move_curosor(4,1);
-
-        echo "b:";
-        $this->move_curosor(4, 3);
-
-        $blue = readline();
-        echo "\x1b[2K"; 
-        continue;
-
-      } else {
-        $blue = intval($blue);
-        if ($blue > 255 || $blue < 0) {
-          echo "\x1b[2K";
-          $this->move_curosor(4,1);
-
-          echo "b:";
-          $this->move_curosor(4, 3);
-
-          $blue = readline();
-          echo "\x1b[2K"; 
-          continue;
-        }
-        break;
-      }
-    }
-    array_push($rgb, $red, $green, $blue);
-    return $rgb;
+  array_push($rgb, $red, $green, $blue);
+  return $rgb;
   }
   private function draw() {
     $r = $this->rgb[0];
     $g = $this->rgb[1];
     $b = $this->rgb[2];
 
-    echo "\x1b[38;2;{$r};{$g};{$b}m";
+    echo "\033[38;2;{$r};{$g};{$b}m";
     echo "█";
-    echo "\x1b[0m";
+    echo "\033[0m";
   }
-
+  private function update_highest_points() {
+    
+  }
+  private function leave() {
+    $this->is_running = false;
+  }
   public function move() {
     $key = $this->read_key();
     switch($key) {
@@ -242,10 +208,14 @@ class Editor {
         echo "\033[1B";
         break;
       case 13:            //Enter 
+        $this->update_highest_points();
         $this->draw();
         break;
-      case 9:
+      case 9:             //Tab
         $this->rgb = $this->set_rgb();
+      case 8:
+        echo " ";
+        echo "\033[2D";
     } 
   }     
 }
@@ -253,8 +223,10 @@ class Editor {
 echo "\x1b[10;10H\x1b[2J";
 $editor =  new Editor;
 
+echo "\033[2 q";
 while ($editor->is_running) {
   $editor->move();
 }
+echo "\033[5 q";
 
 

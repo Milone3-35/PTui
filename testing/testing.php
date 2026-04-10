@@ -2,98 +2,35 @@
 
 $ffi = FFI::cdef("
   void* GetStdHandle(unsigned int nStdHandle);
+  typedef struct {
+    short X;
+    short Y;
+  } COORD;
 
-  bool GetConsoleMode(void* hConsoleHandle, unsigned int* lpMode);
-  bool SetConsoleMode(void* hConsoleHandle, unsigned int dwMode);
-  bool ReadConsoleInputA(void* hConsoleInput, void* lpBuffer, unsigned int nLength, unsigned int* lpNumberOfEventsRead);
-  bool FlushConsoleInputBuffer(void* hConsoleInput);
+  typedef struct {
+    short Left;
+    short Top;
+    short Right;
+    short Bottom;
+  } SMALL_RECT;
 
-  struct KEY_EVENT_RECORD {
-    int bKeyDown;
-    unsigned short wRepeatCount;
-    unsigned short wVirtualKeyCode;
-    unsigned short wVirtualScanCode;
-    union {
-      unsigned short UnicodeChar;
-      char AciiChar;
-    } uChar;
-    unsigned int dwControlKeyState;
-  };
+  typedef struct {
+    COORD dwSize;
+    COORD dwCursorPosition;
+    unsigned short wAttributes;
+    SMALL_RECT srWindow;
+    COORD dwMaximumWindowSize;
+  } CONSOLE_SCREEN_BUFFER_INFO;
 
-  struct INPUT_RECORD {
-    unsigned short EventType;
-    union {
-      struct KEY_EVENT_RECORD KeyEvent;
-    } Event;
-  };
-
+  bool GetConsoleScreenBufferInfo(void* hConsoleOutput, CONSOLE_SCREEN_BUFFER_INFO* lpConsoleScreenBufferInfo);
 ", "kernel32.dll"
 );
 
-function move_curosor(int $x, int $y) {
-  echo "\033[{$x};{$y}H";
-}
+$stdout = $ffi->GetStdHandle(-11);
+$csbi = $ffi->new("CONSOLE_SCREEN_BUFFER_INFO");
+$ffi->GetConsoleScreenBufferInfo($stdout, FFI::addr($csbi));
 
-function draw_tuit(array $tuit, int $x, int $y) {
-  move_curosor($x, $y);
-  foreach ($tuit as $line) {
-    echo "\0337";
-    echo $line;
-    echo "\0338";
-    echo "\033[1B";
-  }
-}
+$rows = $csbi->dwSize->X;
+$columns = $csbi->dwSize->Y;
 
-// $square = file("C:\\Users\Milo\\tui-engine\\sample-tuits\\square.tuit");
-// draw_tuit($square, 20, 30);
-
-function enable_raw_mode() {
-  global $ffi;
-  $stdin = $ffi->GetStdHandle(-10);
-  
-  $mode = FFI::new("unsigned int");
-  $ffi->GetConsoleMode($stdin, FFI::addr($mode));
-
-  $mode->cdata &= ~ 0x0004;
-  $mode->cdata &= ~ 0x0002;
-
-  $ffi->SetConsoleMode($stdin, $mode->cdata);
-}
-
-function disable_raw_mode() {
-  global $ffi;
-  $stdin = $ffi->GetStdHandle(-10);
-  
-  $mode = FFI::new("unsigned int");
-  $ffi->GetConsoleMode($stdin, FFI::addr($mode));
-
-  $mode->cdata |= 0x0004;
-  $mode->cdata |= 0x0002;
-
-  $ffi->SetConsoleMode($stdin, $mode->cdata);
-}
-
-function read_key() {
-  global $ffi;
-
-  $input_record = $ffi->new("struct INPUT_RECORD");
-
-  $key_event = $input_record->Event->KeyEvent;
-  
-  $eventsRead = $ffi->new("unsigned int");
-
-  $stdin = $ffi->GetStdHandle(-10);
-  $ffi->FlushConsoleInputBuffer($stdin);
-  
-  do {
-    $ffi->ReadConsoleInputA($stdin, FFI::addr($input_record), 1, FFI::addr($eventsRead));
-  } while ($key_event->bKeyDown !== 1 || $input_record->EventType !== 0x0001);
-
-  return $key_event->wVirtualKeyCode;
-}
-
-$key = read_key();
-echo "$key \n";
-
-
-
+echo $rows . "\n" .  $columns;
