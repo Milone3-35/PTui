@@ -362,9 +362,15 @@ class Editor {
 			break;
 
 		case 8:							//Backspace
+			$key = $this->cursor_pos_x . "_" . $this->cursor_pos_y;
+			if (isset($this->pixels[$key])) {
+				unset($this->pixels[$key]);
+			}
 			echo " ";
+
 			if ($this->cursor_pos_x <= $this->canvas_frame["Left x"]) { break; }; 
 			$this->cursor_pos_x -= 1;
+
 			echo "\033[2D";
 			break;
 
