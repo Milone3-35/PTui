@@ -1,3 +1,5 @@
+
+
 # PTui - Terminal User Interface Texture Editor
 
 **PTui** is an experimental, terminal-based pixel art editor written entirely in PHP. It leverages the PHP FFI (Foreign Function Interface) to communicate directly with the Windows `kernel32.dll`, allowing for precise console manipulation and low-level input handling.
@@ -20,6 +22,7 @@ The editor is controlled entirely via keyboard. You can navigate the canvas, set
 | **Backspace** | Delete pixel (resets to whitespace) |
 | **ESC** | Exit the program |
 
+<img width="848" height="381" alt="Animation" src="https://github.com/user-attachments/assets/21660d1aa718-4ee1-9e6cd5ed0a556479" />
 
 --- 
 
@@ -44,6 +47,8 @@ To keep file sizes minimal, PTui uses a bespoke binary format. A `.tuit` file co
 
 1. Ensure you have **PHP 7.4+** installed.
 2. The **FFI extension** must be enabled in your `php.ini` (`extension=ffi`).
+
+
 3. Clone the repository:
    ```bash
    git clone [https://github.com/Milone3-35/PTui.git](https://github.com/Milone3-35/PTui.git)
