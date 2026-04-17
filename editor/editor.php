@@ -56,9 +56,27 @@ class Editor {
   public bool $is_running;
 
   //RGB
-  private array $rgb;
-  //Size
-  private array $highest_points;
+	private array $rgb;
+
+	//Cursor position
+	private int $cursor_pos_x;
+	private int $cursor_pos_y;
+	
+	//Canvas frame 
+	private array $canvas_frame;
+
+	//Pixels 
+	private array $pixels;
+
+	//Size 
+	private int $terminal_width;
+	private int $terminal_height;
+
+	private int $canvas_width;
+	private int $canvas_height;
+	
+ 	//Save 
+	private ?string $file_path = null;
 
   function __construct()
   { 
@@ -73,16 +91,74 @@ class Editor {
 
     $ffi->SetConsoleMode($stdout, $mode->cdata);
 
-    $this->is_running = true;
-    $this->highest_points = [0,0,0,0];    //N|E|S|W
-    $this->rgb = $this->set_rgb();
-  }
+		$this->is_running = true;
 
-  private function move_curosor(int $x, int $y) {
-    echo "\033[{$x};{$y}H";
-  }
+		$stdout = $ffi->GetStdHandle(-11);
+		$csbi = $ffi->new("CONSOLE_SCREEN_BUFFER_INFO");
+		$ffi->GetConsoleScreenBufferInfo($stdout, FFI::addr($csbi));
 
-  private function enable_raw_mode() {
+		$this->terminal_width = $csbi->dwSize->X - 20;
+		$this->terminal_height = $csbi->dwSize->Y;
+
+		$this->canvas_frame = $this->create_canvas();
+		$this->rgb = $this->set_rgb();
+		
+		$canvas_left_corner_y = floor($this->terminal_height / 2) - floor($this->canvas_height / 2);
+		$canvas_left_corner_x = floor($this->terminal_width / 2) - floor($this->canvas_width / 2);
+		$this->move_curosor($canvas_left_corner_y, $canvas_left_corner_x + 15);
+
+		$this->cursor_pos_y = $canvas_left_corner_y;
+		$this->cursor_pos_x = $canvas_left_corner_x +15;
+
+		$this->pixels = [];
+  }
+	
+	public function create_canvas() {
+		//Width
+		while (true) {
+			$this->move_curosor(1, 0);
+			$width = readline("width:");
+
+			if (!is_numeric($width)) { continue; };
+			if ($width > $this->terminal_width || $width < 20) { continue; };
+
+			$this->canvas_width = $width;
+			break;
+		}	
+		//Height 
+		while (true) {
+			$this->move_curosor(2, 0);
+			$height = readline("height:");
+
+			if (!is_numeric($height)) { continue; };
+			if ($height > $this->terminal_height || $height <= 0) { continue; };
+
+			$this->canvas_height = $height;
+			break;
+		}
+		
+		$canvas_left_corner_y = floor($this->terminal_height / 2) - floor($this->canvas_height / 2);
+		$canvas_left_corner_x = floor($this->terminal_width / 2) - floor($this->canvas_width / 2);
+		$this->move_curosor($canvas_left_corner_y, $canvas_left_corner_x + 15);
+
+		echo "\033[38;2;255;255;255m";
+		for ($i = 0; $i < $this->canvas_height; $i++) {
+			echo str_repeat("█", $this->canvas_width);
+			$this->move_curosor($canvas_left_corner_y + $i, $canvas_left_corner_x + 15);
+		}
+		$corner_coordinates = [
+			"Left x" => $canvas_left_corner_x + 15, 
+			"Right x" => $canvas_left_corner_x + 15 + $this->canvas_width - 1, 
+			"Top y" => $canvas_left_corner_y, 
+			"Bottom y" => $canvas_left_corner_y + $this->canvas_height - 2
+		];
+		return $corner_coordinates;
+	}
+  private function move_curosor(int $y, int $x) {
+    echo "\033[{$y};{$x}H";
+	}
+
+  public function enable_raw_mode() {
     global $ffi;
     $stdin = $ffi->GetStdHandle(-10);
     
@@ -95,7 +171,7 @@ class Editor {
     $ffi->SetConsoleMode($stdin, $mode->cdata);
   }
 
-  private function disable_raw_mode() {
+  public function disable_raw_mode() {
     global $ffi;
     $stdin = $ffi->GetStdHandle(-10);
     
@@ -129,11 +205,6 @@ class Editor {
 
   private function set_rgb() {
   $rgb = [];
-
-  /* We do a range of 1-256 even tho rgb is from 0-255, 
-  but intval returns 0 if $value is a string and we need 0, so we 
-  just substract 1 at the end
-  */
 
   //RED
   while (true) {
@@ -176,7 +247,8 @@ class Editor {
 
   array_push($rgb, $red, $green, $blue);
   return $rgb;
-  }
+	}
+
   private function draw() {
     $r = $this->rgb[0];
     $g = $this->rgb[1];
@@ -184,49 +256,141 @@ class Editor {
 
     echo "\033[38;2;{$r};{$g};{$b}m";
     echo "█";
-    echo "\033[0m";
-  }
-  private function update_highest_points() {
-    
+		echo "\033[0m";
+
+		$key = $this->cursor_pos_x . "_" . $this->cursor_pos_y;
+		$this->pixels[$key] = [$r, $g, $b];
   }
   private function leave() {
     $this->is_running = false;
-  }
+	}
+	public function save() {
+    $this->move_curosor(3, 1);
+    
+    if ($this->file_path === null) {
+        $this->file_path = readline("Save at: ");
+    }
+    
+    $data = pack("A4Cnn", "TUIT", 1, $this->canvas_width, $this->canvas_height);
+
+    foreach ($this->pixels as $key => $pixel) {
+        [$x, $y] = explode("_", $key);
+        
+        $data .= pack("CCCCC", (int)$x, (int)$y, $pixel[0], $pixel[1], $pixel[2]);
+    }
+
+    file_put_contents($this->file_path, $data);
+
+    $this->move_curosor($this->cursor_pos_y, $this->cursor_pos_x);
+	}
+
+	public function load() {
+		$this->move_curosor(3,1);
+		$this->file_path = readline("Load from:");
+
+		$tuit_to_load = file_get_contents($this->file_path);
+
+		$pixel_data = substr($tuit_to_load, 9);
+		$total_bytes = strlen($pixel_data);
+
+		for ($i = 0; $i < $total_bytes; $i += 5) {
+			$chunk = substr($pixel_data, $i, 5);
+
+			$pixel = unpack("Cx/Cy/Cr/Cg/Cb", $chunk);
+			$key = $pixel['x'] . "_" . $pixel['y'];
+			$this->pixels[$key] = [$pixel['r'], $pixel['g'], $pixel['b']];
+		}
+		$this->redraw();
+	}
+
+	private function redraw() {
+		foreach ($this->pixels as $key => $pixel) {
+			[$x, $y] = explode("_", $key);
+			$this->move_curosor($y, $x);
+			echo "\033[38;2;{$pixel[0]};{$pixel[1]};{$pixel[2]}m█";
+		}
+		echo "\033[0m";
+
+		$canvas_left_corner_y = floor($this->terminal_height / 2) - floor($this->canvas_height / 2);
+		$canvas_left_corner_x = floor($this->terminal_width / 2) - floor($this->canvas_width / 2);
+		$this->move_curosor($canvas_left_corner_y, $canvas_left_corner_x + 15);	
+	}
   public function move() {
     $key = $this->read_key();
     switch($key) {
-      case 37:            //Left
-        echo "\033[1D";
-        break;
-      case 38:            //Up
-        echo "\033[1A";
-        break;
-      case 39:            //Right
-        echo "\033[1C";
-        break;
-      case 40:            //Down
-        echo "\033[1B";
-        break;
-      case 13:            //Enter 
-        $this->update_highest_points();
-        $this->draw();
-        break;
-      case 9:             //Tab
-        $this->rgb = $this->set_rgb();
-      case 8:
-        echo " ";
-        echo "\033[2D";
-    } 
+		
+		case 37:            //Left
+			if ($this->cursor_pos_x <= $this->canvas_frame["Left x"]) {
+				break;
+			}
+			$this->cursor_pos_x -= 1;
+      echo "\033[1D";
+			break;
+
+		case 38:            //Up
+			if ($this->cursor_pos_y <= $this->canvas_frame["Top y"]) {
+				break;
+			}
+			$this->cursor_pos_y -= 1;
+      echo "\033[1A";
+			break;
+
+		case 39:            //Right
+			if ($this->cursor_pos_x >= $this->canvas_frame["Right x"]) {
+				break;
+			}
+			$this->cursor_pos_x += 1;
+      echo "\033[1C";
+			break;
+
+		case 40:            //Down
+			if ($this->cursor_pos_y >= $this->canvas_frame["Bottom y"]) {
+				break;
+			}
+			$this->cursor_pos_y += 1;
+      echo "\033[1B";
+			break;
+
+    case 13:            //Enter 
+			$this->draw();
+			echo "\033[1D";   //Cursor position is not influenced by enter
+			break;
+
+    case 9:             //Tab
+			$this->rgb = $this->set_rgb();
+			$this->move_curosor($this->cursor_pos_y, $this->cursor_pos_x);
+			break;
+
+		case 8:							//Backspace
+			echo " ";
+			if ($this->cursor_pos_x <= $this->canvas_frame["Left x"]) { break; }; 
+			$this->cursor_pos_x -= 1;
+			echo "\033[2D";
+			break;
+
+		case 27: 					//ESC
+			$this->leave();
+			break;
+
+		case 83:					//S
+			$this->save();
+			break;
+
+		case 76: 					//L
+			$this->load();
+			break;
+		}
   }     
 }
 
 echo "\x1b[10;10H\x1b[2J";
 $editor =  new Editor;
-
+$editor->enable_raw_mode();
 echo "\033[2 q";
 while ($editor->is_running) {
   $editor->move();
 }
+$editor->disable_raw_mode();
 echo "\033[5 q";
 
 
