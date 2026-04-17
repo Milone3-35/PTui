@@ -22,7 +22,7 @@ The editor is controlled entirely via keyboard. You can navigate the canvas, set
 | **Backspace** | Delete pixel (resets to whitespace) |
 | **ESC** | Exit the program |
 
-<img width="848" height="381" alt="Animation" src="https://github.com/user-attachments/assets/21660d1aa718-4ee1-9e6cd5ed0a556479" />
+![PTui Demo Preview](usage.gif)
 
 --- 
 
