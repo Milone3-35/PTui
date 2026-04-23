@@ -285,6 +285,8 @@ class Editor {
 	}
 
 	public function load() {
+		$this->pixels = [];
+
 		$this->move_curosor(3,1);
 		$this->file_path = readline("Load from:");
 
@@ -366,7 +368,7 @@ class Editor {
 			if (isset($this->pixels[$key])) {
 				unset($this->pixels[$key]);
 			}
-			echo " ";
+			echo "\033[38;2;255;255;255m█";
 
 			if ($this->cursor_pos_x <= $this->canvas_frame["Left x"]) { break; }; 
 			$this->cursor_pos_x -= 1;
