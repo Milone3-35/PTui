@@ -370,10 +370,7 @@ class Editor {
 			}
 			echo "\033[38;2;255;255;255m█";
 
-			if ($this->cursor_pos_x <= $this->canvas_frame["Left x"]) { break; }; 
-			$this->cursor_pos_x -= 1;
-
-			echo "\033[2D";
+			echo "\033[1D";
 			break;
 
 		case 27: 					//ESC
